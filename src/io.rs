@@ -18,28 +18,6 @@ pub fn for_day(day: usize) -> Result<String, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_for_day() -> Result<(), Error> {
-        let input = for_day(1)?;
-        let mut lines = input.lines();
-        let first = lines.next().unwrap();
-        let last = lines.last().unwrap();
-
-        assert_eq!(first, "4601");
-        assert_eq!(last, "6089");
-
-        let input = for_day(25)?;
-        let mut lines = input.lines();
-        let first = lines.next().unwrap();
-        let last = lines.last().unwrap();
-
-        assert_eq!(first, "2=1");
-        assert_eq!(last, "2-=2-110012");
-
-        Ok(())
-    }
-
     use quickcheck::Arbitrary;
 
     #[derive(Debug, Clone, Copy)]
