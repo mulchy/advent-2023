@@ -9,6 +9,7 @@ dependencies = [
  "anyhow",
  "quickcheck",
  "quickcheck_macros",
+ "regex",
 ]
 
 [[package]]
