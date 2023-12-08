@@ -120,9 +120,7 @@ impl Card {
             .filter(|n| self.winning_numbers.contains(n))
             .count();
 
-        (1..=winners)
-            .map(|i| self.id + i as i32)
-            .collect()
+        (1..=winners).map(|i| self.id + i as i32).collect()
     }
 }
 

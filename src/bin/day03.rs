@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use advent::io;
 use anyhow::Result;
@@ -6,7 +6,7 @@ use anyhow::Result;
 fn main() -> Result<()> {
     let input = io::for_day(3)?;
     println!("{}", part1(&input));
-    println!("{}", part2(&input)?);
+    println!("{}", part2(&input));
     Ok(())
 }
 
@@ -17,8 +17,60 @@ fn part1(input: &str) -> usize {
         .sum()
 }
 
-fn part2(_input: &str) -> Result<String> {
-    unimplemented!("You have to solve the puzzle first!")
+fn part2(input: &str) -> usize {
+    // find all part numbers
+    // create a hashmap of start..end -> part number
+    // find all the * symbols
+    // generate the boundary for each
+    // for each boundary number, look up part number
+    // count the unique part numbers
+    // keep only the ones with two adjacent part numbers
+
+    // 467..114..
+    // ...*...... <- 13 bounding box = 2,3,4,12,14,22,23,24  parts(2) -> 467 ... parts(22) -> 35, part(23) -> 35
+    // ..35..633.
+    // ......#...
+    // 617*......
+    // .....+.58.
+    // ..592.....
+    // ......755.
+    // ...$.*....
+    // .664.598..
+
+    let part_numbers = parse(input);
+    let mut part_number_by_range = HashMap::new();
+    for number in &part_numbers {
+        for i in number.start..number.end {
+            part_number_by_range.insert(i, number);
+        }
+    }
+
+    let width = input.lines().next().unwrap().len();
+    let data = input
+        .chars()
+        .filter(|c| !c.is_ascii_whitespace())
+        .collect::<String>();
+
+    let mut sum = 0;
+    for (i, _) in data.match_indices('*') {
+        let boundary = boundary(i, i + 1, width, data.len());
+
+        let part_numbers = boundary
+            .iter()
+            .flat_map(|i| part_number_by_range.get(i))
+            .collect::<HashSet<_>>();
+
+        let parts = Vec::from_iter(part_numbers);
+        let [part1, part2] = parts.as_slice() else {
+            continue;
+        };
+
+        let gear_ratio = part1.value * part2.value;
+
+        sum += gear_ratio;
+    }
+
+    sum
 }
 
 fn symbols(input: &str) -> HashSet<char> {
@@ -83,7 +135,7 @@ fn boundary(start: usize, end: usize, width: usize, max: usize) -> Vec<usize> {
     output
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 struct Number {
     value: usize,
     start: usize,
@@ -436,12 +488,20 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_part2() -> Result<()> {
-        let example_input = "";
-        let expected_output = "";
+        let example_input = "467..114..
+...*......
+..35..633.
+......#...
+617*......
+.....+.58.
+..592.....
+......755.
+...$.*....
+.664.598..";
+        let expected_output = 467835;
 
-        assert_eq!(part2(example_input)?, expected_output);
+        assert_eq!(part2(example_input), expected_output);
         Ok(())
     }
 }
