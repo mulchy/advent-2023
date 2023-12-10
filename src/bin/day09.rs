@@ -1,5 +1,5 @@
 use advent::io;
-use anyhow::{anyhow, Result};
+use anyhow::{Result};
 
 fn main() -> Result<()> {
     let input = io::for_day(9)?;
@@ -14,7 +14,8 @@ fn part1(input: &str) -> Result<i64> {
         .map(|l| {
             let sequence = parse(l)?;
 
-            next_value(&sequence).ok_or(anyhow!("Invalid sequence: {:?}", sequence))
+            // next_value(&sequence).ok_or(anyhow!("Invalid sequence: {:?}", sequence))
+            Ok(poly_interpolate(&sequence, sequence.len() as i64))
         })
         .collect::<Result<Vec<i64>>>()?;
 
@@ -26,7 +27,8 @@ fn part2(input: &str) -> Result<i64> {
         .lines()
         .map(|l| {
             let sequence = parse(l)?;
-            previous_value(&sequence).ok_or(anyhow!("Invalid sequence: {:?}", sequence))
+            // previous_value(&sequence).ok_or(anyhow!("Invalid sequence: {:?}", sequence))
+            Ok(poly_interpolate(&sequence, -1))
         })
         .collect::<Result<Vec<i64>>>()?;
 
@@ -99,6 +101,35 @@ fn parse(input: &str) -> Result<Vec<i64>> {
         .collect::<Result<Vec<i64>>>()
 }
 
+use nalgebra::{DMatrix, DVector};
+
+fn poly_interpolate(sequence: &[i64], x: i64) -> i64 {
+    let ones = DVector::from_element(sequence.len(), 1.0);
+    let xs = DVector::from_iterator(sequence.len(), (0..sequence.len()).map(|i| i as f64));
+
+    let mut columns = vec![ones, xs.clone()];
+
+    for i in 2..sequence.len() {
+        let column = columns[i - 1].component_mul(&xs);
+        columns.push(column);
+    }
+
+    let m = DMatrix::from_columns(&columns);
+
+    let decomp = m.lu();
+
+    let y = DVector::from_vec(sequence.iter().map(|i| *i as f64).collect::<Vec<_>>());
+
+    let solution = decomp.solve(&y).unwrap();
+
+    let mut sum = 0.0;
+    for (i, coeff) in solution.iter().enumerate() {
+        sum += coeff * (x as f64).powi(i as i32);
+    }
+
+    sum.round() as i64
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -113,8 +144,8 @@ mod tests {
 
     #[test]
     fn test_next_value() {
-        assert_eq!(next_value(&vec![1, 2, 3, 4, 5]), Some(6));
-        assert_eq!(next_value(&vec![10, 13, 16, 21, 30, 45]), Some(68));
+        assert_eq!(next_value(&[1, 2, 3, 4, 5]), Some(6));
+        assert_eq!(next_value(&[10, 13, 16, 21, 30, 45]), Some(68));
 
         // non-polynomial sequence should return None
         assert_eq!(next_value(&[1, 2, 4, 8, 16, 32]), None);
@@ -125,10 +156,10 @@ mod tests {
 
     #[test]
     fn test_previous_value() {
-        assert_eq!(previous_value(&vec![1, 2, 3, 4, 5]), Some(0));
-        assert_eq!(previous_value(&vec![0, 3, 6, 9, 12, 15]), Some(-3));
-        assert_eq!(previous_value(&vec![1, 3, 6, 10, 15, 21]), Some(0));
-        assert_eq!(previous_value(&vec![10, 13, 16, 21, 30, 45]), Some(5));
+        assert_eq!(previous_value(&[1, 2, 3, 4, 5]), Some(0));
+        assert_eq!(previous_value(&[0, 3, 6, 9, 12, 15]), Some(-3));
+        assert_eq!(previous_value(&[1, 3, 6, 10, 15, 21]), Some(0));
+        assert_eq!(previous_value(&[10, 13, 16, 21, 30, 45]), Some(5));
     }
 
     #[test]
@@ -151,5 +182,12 @@ mod tests {
 
         assert_eq!(part2(example_input)?, expected_output);
         Ok(())
+    }
+
+    #[test]
+    fn test_poly_interpolate() {
+        let sequence = vec![10, 13, 16, 21, 30, 45];
+        assert_eq!(poly_interpolate(&sequence, 6), 68);
+        assert_eq!(poly_interpolate(&sequence, -1), 5);
     }
 }
