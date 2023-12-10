@@ -16,8 +16,6 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-trait Card: PartialEq + Eq + PartialOrd + Ord + Copy + Clone + Hash + Debug + FromStr {}
-
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Hash)]
 enum CardWithoutJoker {
     Two,
@@ -34,8 +32,6 @@ enum CardWithoutJoker {
     King,
     Ace,
 }
-
-impl Card for CardWithoutJoker {}
 
 impl FromStr for CardWithJoker {
     type Err = anyhow::Error;
@@ -77,8 +73,6 @@ enum CardWithJoker {
     Ace,
 }
 
-impl Card for CardWithJoker {}
-
 impl FromStr for CardWithoutJoker {
     type Err = anyhow::Error;
 
@@ -104,49 +98,23 @@ impl FromStr for CardWithoutJoker {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Copy, Clone)]
 enum Rank {
-    HighCard,
-    OnePair,
-    TwoPairs,
-    ThreeOfAKind,
-    FullHouse,
-    FourOfAKind,
-    FiveOfAKind,
+    HighCard = 1,
+    OnePair = 2,
+    TwoPairs = 3,
+    ThreeOfAKind = 4,
+    FullHouse = 5,
+    FourOfAKind = 6,
+    FiveOfAKind = 7,
 }
 
-#[derive(Debug, Clone)]
-struct Hand<T: Card> {
-    cards: Vec<T>,
-    rank: Rank,
+trait Rankable: Ord + Clone + Debug {
+    fn rank(&self) -> Rank;
 }
 
-impl<T: Card> Hand<T> {}
-
-impl<T: Card> Ord for Hand<T> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        match self.rank.cmp(&other.rank) {
-            Less => Less,
-            Greater => Greater,
-            Equal => self.cards.cmp(&other.cards),
-        }
-    }
-}
-
-impl<T: Card> PartialOrd for Hand<T> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl<T: Card> PartialEq for Hand<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.cmp(other) == Equal
-    }
-}
-
-impl<T: Card> Eq for Hand<T> {}
-
-// todo specialize for joker
-fn rank_hand<T: Card>(cards: &[T]) -> Result<Rank> {
+fn count_to_rank<T>(cards: &[T]) -> Rank
+where
+    T: Eq + Hash + Debug,
+{
     let counts = cards.iter().fold(HashMap::new(), |mut acc, card| {
         *acc.entry(card).or_insert(0) += 1;
         acc
@@ -156,22 +124,121 @@ fn rank_hand<T: Card>(cards: &[T]) -> Result<Rank> {
     dupes.sort();
 
     match dupes.as_slice() {
-        [1, 1, 1, 1, 1] => Ok(Rank::HighCard),
-        [1, 1, 1, 2] => Ok(Rank::OnePair),
-        [1, 2, 2] => Ok(Rank::TwoPairs),
-        [1, 1, 3] => Ok(Rank::ThreeOfAKind),
-        [2, 3] => Ok(Rank::FullHouse),
-        [1, 4] => Ok(Rank::FourOfAKind),
-        [5] => Ok(Rank::FiveOfAKind),
-        _ => Err(anyhow!("Invalid hand: {:?}", cards)),
+        [1, 1, 1, 1, 1] => Rank::HighCard,
+        [1, 1, 1, 2] => Rank::OnePair,
+        [1, 2, 2] => Rank::TwoPairs,
+        [1, 1, 3] => Rank::ThreeOfAKind,
+        [2, 3] => Rank::FullHouse,
+        [1, 4] => Rank::FourOfAKind,
+        [5] => Rank::FiveOfAKind,
+        _ => panic!("Invalid hand: {:?}", cards),
     }
 }
 
-impl<T: Card> FromStr for Hand<T> {
+impl Rankable for Hand<CardWithoutJoker> {
+    fn rank(&self) -> Rank {
+        count_to_rank(&self.cards)
+    }
+}
+
+impl Rankable for Hand<CardWithJoker> {
+    fn rank(&self) -> Rank {
+        let counts = self.cards.iter().fold(HashMap::new(), |mut acc, card| {
+            *acc.entry(card).or_insert(0) += 1;
+            acc
+        });
+
+        let jokers = *counts.get(&CardWithJoker::Joker).unwrap_or(&0);
+
+        if jokers == 0 {
+            return count_to_rank(&self.cards);
+        }
+
+        if jokers == 5 {
+            return Rank::FiveOfAKind;
+        }
+
+        let mut cards_and_counts: Vec<(&&CardWithJoker, &i32)> = counts.iter().collect();
+        cards_and_counts.sort_by_key(|(_, count)| -**count);
+
+        let card_to_convert_to = if cards_and_counts[0].0 == &&CardWithJoker::Joker {
+            **cards_and_counts[1].0
+        } else {
+            **cards_and_counts[0].0
+        };
+
+        let mut non_jokers: Vec<CardWithJoker> = self
+            .cards
+            .iter()
+            .filter(|&&c| c != CardWithJoker::Joker)
+            .cloned()
+            .collect();
+
+        for _ in 0..jokers {
+            non_jokers.push(card_to_convert_to);
+        }
+
+        count_to_rank(&non_jokers)
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Hand<T>
+where
+    T: Ord + Copy + Debug + FromStr,
+{
+    cards: Vec<T>,
+}
+
+impl<T> Ord for Hand<T>
+where
+    T: Ord + Copy + Debug + FromStr,
+    Self: Rankable,
+{
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match self.rank().cmp(&other.rank()) {
+            Less => Less,
+            Greater => Greater,
+            Equal => self.cards.cmp(&other.cards),
+        }
+    }
+}
+
+impl<T> PartialOrd for Hand<T>
+where
+    T: Ord + Copy + Debug + FromStr,
+    Self: Rankable,
+{
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<T> PartialEq for Hand<T>
+where
+    T: Ord + Copy + Debug + FromStr,
+    Self: Rankable,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other) == Equal
+    }
+}
+
+impl<T> Eq for Hand<T>
+where
+    T: Ord + Copy + Debug + FromStr,
+    Self: Rankable,
+{
+}
+
+impl<T> FromStr for Hand<T>
+where
+    T: Ord + Copy + Debug + FromStr,
+{
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self> {
-        let cards: Vec<T> = s
+        let cards = s
             .chars()
             .map(|c| {
                 c.to_string().as_str().parse::<T>().map_err(|_e| {
@@ -180,19 +247,25 @@ impl<T: Card> FromStr for Hand<T> {
             })
             .collect::<Result<Vec<T>>>()?;
 
-        let rank = rank_hand(&cards)?;
-
-        Ok(Self { cards, rank })
+        Ok(Self { cards })
     }
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
-struct HandAndBid<T: Card> {
+struct HandAndBid<T>
+where
+    T: Ord + Copy + Debug + FromStr,
+    Hand<T>: Rankable,
+{
     hand: Hand<T>,
     bid: i32,
 }
 
-impl<T: Card> FromStr for HandAndBid<T> {
+impl<T> FromStr for HandAndBid<T>
+where
+    T: FromStr + Ord + Copy + Debug,
+    Hand<T>: Rankable,
+{
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self> {
@@ -207,11 +280,15 @@ impl<T: Card> FromStr for HandAndBid<T> {
     }
 }
 
-fn do_it<T: Card>(input: &str) -> Result<i32> {
+fn do_it<T>(input: &str) -> Result<i32>
+where
+    T: FromStr + Ord + Copy + Debug,
+    Hand<T>: Rankable,
+{
     let mut hands_and_bids = input
         .lines()
-        .map(HandAndBid::<T>::from_str)
-        .collect::<Result<Vec<_>>>()?;
+        .map(HandAndBid::from_str)
+        .collect::<Result<Vec<HandAndBid<T>>>>()?;
     hands_and_bids.sort();
 
     Ok(hands_and_bids
@@ -246,7 +323,7 @@ mod tests {
 
         for (hand, expected_rank) in input {
             let hand = hand.parse::<Hand<CardWithoutJoker>>()?;
-            assert_eq!(hand.rank, expected_rank);
+            assert_eq!(hand.rank(), expected_rank);
         }
 
         Ok(())
@@ -258,16 +335,15 @@ mod tests {
 
         assert_eq!(
             input.parse::<HandAndBid<CardWithoutJoker>>()?,
-            HandAndBid::<CardWithoutJoker> {
+            HandAndBid {
                 hand: Hand {
                     cards: vec![
                         CardWithoutJoker::Three,
                         CardWithoutJoker::Two,
                         CardWithoutJoker::Ten,
                         CardWithoutJoker::Three,
-                        CardWithoutJoker::King
+                        CardWithoutJoker::King,
                     ],
-                    rank: OnePair,
                 },
                 bid: 765,
             }
@@ -282,13 +358,38 @@ KTJJT 220
 QQQJA 483";
 
     #[test]
+    fn test_rank_jokers() -> Result<()> {
+        assert_eq!(
+            Hand::<CardWithJoker>::from_str("JTTJJ")?.rank(),
+            FiveOfAKind
+        );
+        assert_eq!(
+            Hand::<CardWithJoker>::from_str("T55J5")?.rank(),
+            FourOfAKind
+        );
+        assert_eq!(
+            Hand::<CardWithJoker>::from_str("KTJJT")?.rank(),
+            FourOfAKind
+        );
+        assert_eq!(
+            Hand::<CardWithJoker>::from_str("QQQJA")?.rank(),
+            FourOfAKind
+        );
+        assert_eq!(
+            Hand::<CardWithJoker>::from_str("JJJJJ")?.rank(),
+            FiveOfAKind
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn test_part1() -> Result<()> {
         assert_eq!(part1(EXAMPLE_INPUT)?, 6440);
         Ok(())
     }
 
     #[test]
-    #[ignore]
     fn test_part2() -> Result<()> {
         assert_eq!(part2(EXAMPLE_INPUT)?, 5905);
         Ok(())
