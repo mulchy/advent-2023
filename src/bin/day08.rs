@@ -2,6 +2,7 @@ use std::{collections::HashMap, str::FromStr};
 
 use advent::io;
 use anyhow::{bail, Result};
+use num::integer::lcm;
 
 fn main() -> Result<()> {
     let input = io::for_day(8)?;
@@ -94,16 +95,16 @@ fn ghost_walk(instructions: Instruction) -> usize {
         .filter(|s| s.ends_with('A'))
         .cloned()
         .collect::<Vec<_>>();
-    println!("{:?}", current);
+
+    let mut cycles = vec![None; current.len()];
     let mut count = 0;
 
-    loop {
+    while cycles.iter().any(|c| c.is_none()) {
+        let direction = instructions.directions[count % instructions.directions.len()];
         current = current
             .iter()
             .map(|s| {
                 let (left, right) = instructions.map.get(s).unwrap();
-                let direction = instructions.directions[count % instructions.directions.len()];
-
                 match direction {
                     Direction::Right => right.to_string(),
                     Direction::Left => left.to_string(),
@@ -113,13 +114,14 @@ fn ghost_walk(instructions: Instruction) -> usize {
 
         count += 1;
 
-        println!("{:?}, {:?}", current, count);
-        if current.iter().all(|s| s.ends_with('Z')) {
-            break;
+        for (i, c) in current.iter().enumerate() {
+            if c.ends_with('Z') {
+                cycles[i] = Some(count);
+            }
         }
     }
 
-    count
+    cycles.iter().fold(1, |acc, c| lcm(acc, c.unwrap()))
 }
 
 fn part1(input: &str) -> Result<usize> {
