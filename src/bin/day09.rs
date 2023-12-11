@@ -1,5 +1,5 @@
 use advent::io;
-use anyhow::{Result};
+use anyhow::Result;
 
 fn main() -> Result<()> {
     let input = io::for_day(9)?;
