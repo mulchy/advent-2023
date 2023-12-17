@@ -17,8 +17,19 @@ fn part1(input: &str) -> Result<usize> {
     Ok(path.len() / 2)
 }
 
-fn part2(_input: &str) -> Result<String> {
-    unimplemented!("You have to solve the puzzle first!")
+fn part2(input: &str) -> Result<usize> {
+    let grid = input.parse::<Grid<char>>()?;
+    let (x, y) = grid.find(&'S').unwrap();
+    let path = cycle(&grid, x, y).ok_or(anyhow!("No cycle found"))?;
+    let mut count = 0;
+    for y in 0..grid.height {
+        for x in 0..grid.width {
+            if point_in_polygon(&grid, x, y, &path) {
+                count += 1;
+            }
+        }
+    }
+    Ok(count)
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -202,6 +213,32 @@ fn cycle(grid: &Grid<char>, x: usize, y: usize) -> Option<Vec<(usize, usize)>> {
     None
 }
 
+fn point_in_polygon<T>(grid: &Grid<T>, x: usize, y: usize, path: &[(usize, usize)]) -> bool {
+    let mut crossings = 0;
+    let mut point = Some((x, y));
+
+    if path.contains(&(x, y)) {
+        return false; // only want points strictly inside
+    }
+
+    while let Some((x, y)) = point {
+        if path.contains(&(x, y)) {
+            crossings += 1;
+        }
+
+        if let Some((new_x, new_y)) = Direction::Up.move_from(x, y) {
+            if grid.get(new_x, new_y).is_some() {
+                point = Some((new_x, new_y));
+                continue;
+            }
+        }
+
+        point = None;
+    }
+
+    crossings % 2 == 1
+}
+
 #[cfg(test)]
 mod tests {
     use super::Direction::*;
@@ -309,6 +346,32 @@ LJ.LJ";
     }
 
     #[test]
+    #[ignore]
+    fn test_point_in_polygon() -> Result<()> {
+        let grid = "...........
+.S-------7.
+.|F-----7|.
+.||.....||.
+.||.....||.
+.|L-7.F-J|.
+.|..|.|..|.
+.L--J.L--J.
+..........."
+            .parse::<Grid<char>>()?;
+        let (x, y) = grid.find(&'S').unwrap();
+        let path = cycle(&grid, x, y).unwrap();
+
+        assert!(point_in_polygon(&grid, 2, 6, &path));
+        assert!(point_in_polygon(&grid, 3, 6, &path));
+        assert!(point_in_polygon(&grid, 7, 6, &path));
+        assert!(point_in_polygon(&grid, 8, 6, &path));
+        assert!(!point_in_polygon(&grid, 3, 3, &path));
+        assert!(!point_in_polygon(&grid, 1, 8, &path)); // todo handle edges, maybe try winding number?
+
+        Ok(())
+    }
+
+    #[test]
     fn test_part1() -> Result<()> {
         let expected_output = 8;
 
@@ -319,9 +382,18 @@ LJ.LJ";
     #[test]
     #[ignore]
     fn test_part2() -> Result<()> {
-        let expected_output = "";
+        let input = "FF7FSF7F7F7F7F7F---7
+L|LJ||||||||||||F--J
+FL-7LJLJ||||||LJL-77
+F--JF--7||LJLJ7F7FJ-
+L---JF-JLJ.||-FJLJJ7
+|F|F-JF---7F7-L7L|7|
+|FFJF7L7F-JF7|JL---7
+7-L-JL7||F7|L7F-7F7|
+L.L7LFJ|||||FJL7||LJ
+L7JLJL-JLJLJL--JLJ.L";
 
-        assert_eq!(part2(EXAMPLE_INPUT)?, expected_output);
+        assert_eq!(part2(input)?, 10);
         Ok(())
     }
 }

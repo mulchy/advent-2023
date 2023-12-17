@@ -16,6 +16,10 @@ fn part2(_input: &str) -> Result<String> {
     unimplemented!("You have to solve the puzzle first!")
 }
 
+fn count_arrangements(_input: &str) -> Result<usize> {
+    unimplemented!("You have to solve the puzzle first!")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
